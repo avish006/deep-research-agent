@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: deep-research-agent
+    env: docker
+    plan: free
+    healthCheckPath: /
+    envVars:
+      - key: PORT
+        value: 3001
+      - key: NODE_ENV
+        value: production
