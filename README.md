@@ -1,6 +1,7 @@
 # Deep Research Agent
 
-![UI Snapshot](client/public/favicon.ico) <!-- Placeholder, you can update this to an actual screenshot -->
+<img width="1887" height="863" alt="image" src="https://github.com/user-attachments/assets/67f43f09-503c-4d69-ae52-1094de4f875a" />
+
 
 Deep Research Agent is a fully autonomous, multi-agent AI system designed to conduct comprehensive, deep-dive web research on complex topics. Give it a broad topic, and it will independently formulate a research plan, browse the internet, extract relevant data from credible sources, and synthesize its findings into a massive, heavily-detailed Markdown report.
 
