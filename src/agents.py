@@ -4,10 +4,9 @@ import asyncio
 from typing import List
 import logging
 
-from langchain_openai import ChatOpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser, JsonOutputParser
-from langchain.agents import create_agent
 
 from src.state import ResearchState, ResearchPlan, SearchQuery, ReportSection
 from src.utils.tools import get_research_tools
@@ -17,9 +16,8 @@ from src.utils.citations import CitationFormatter
 from src.llm_tracker import estimate_tokens
 from src.callbacks import (
     emit_planning_start, emit_planning_complete,
-    emit_search_start, emit_search_results, 
+    emit_search_start, emit_search_results,
     emit_extraction_start, emit_extraction_complete,
-    emit_synthesis_start, emit_synthesis_progress, emit_synthesis_complete,
     emit_writing_start, emit_writing_section, emit_writing_complete,
     emit_error
 )
@@ -29,25 +27,14 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def get_llm(temperature: float = 0.7, model_override: str = None):
-    """Get a ChatOpenAI instance pointed at OpenRouter.
-    
-    Args:
-        temperature: Temperature for the LLM
-        model_override: Optional model name to override config.model_name
-    """
-    model_name = model_override or config.model_name
-    logger.info(f"Using OpenRouter model: {model_name}")
-    return ChatOpenAI(
-        model=model_name,
-        base_url=config.openrouter_base_url,
-        api_key=config.openrouter_api_key,
+def get_llm(temperature: float = 0.7):
+    """Return a ChatGoogleGenerativeAI instance using the hardcoded Gemini model."""
+    logger.info(f"Using Google Gemini model: {config.model_name}")
+    return ChatGoogleGenerativeAI(
+        model=config.model_name,
+        google_api_key=config.google_api_key,
         temperature=temperature,
         max_retries=10,
-        default_headers={
-            "HTTP-Referer": "https://deep-research-agent.app",
-            "X-Title": "Deep Research Agent",
-        },
     )
 
 
@@ -260,572 +247,72 @@ class ResearchSearcher:
         self.max_retries = 3
         
     async def search(self, state: ResearchState) -> dict:
-        """Autonomously execute research searches using tools.
-        
-        The agent will decide which searches to perform, when to extract content,
-        and how to gather comprehensive information.
-        
-        Returns dict with search results that LangGraph will merge into state.
-        """
+        """Mechanically execute planned queries â€” zero LLM calls in this phase."""
         if not state.plan:
             await emit_error("No research plan available")
             return {"error": "No research plan available"}
-        
-        logger.info(f"Autonomous agent researching: {len(state.plan.search_queries)} planned queries")
-        
-        # Emit progress for each planned query
+
+        logger.info(f"Mechanical search: {len(state.plan.search_queries)} queries")
+
+        from src.utils.web_utils import WebSearchTool, ContentExtractor
+        from src.state import SearchResult as SR
+        search_tool = WebSearchTool(max_results=config.max_search_results_per_query)
+        extractor = ContentExtractor(timeout=12)
+
+        all_results: list = []
+        all_scores: list = []
         total_queries = len(state.plan.search_queries)
+
         for i, query in enumerate(state.plan.search_queries, 1):
             await emit_search_start(query.query, i, total_queries)
-        
-        # Create system prompt for autonomous agent with config-based limits
-        max_searches = config.max_search_queries
-        max_results_per_search = config.max_search_results_per_query
-        expected_total_results = max_searches * max_results_per_search
-        
-        system_prompt = f"""You are an elite research investigator with expertise in finding accurate, authoritative information. Your mission is to gather comprehensive, verified data from the most credible sources available.
-
-## Your Available Tools
-1. **web_search(query, max_results)**: Search the web for information
-2. **extract_webpage_content(url)**: Extract full article content from a URL
-
-## Research Protocol
-
-### Phase 1: Strategic Searching
-Execute the planned search queries systematically:
-- Limit to **{max_searches} searches maximum**
-- Each search returns up to **{max_results_per_search} results**
-- If initial queries yield poor results, adapt with refined queries
-
-### Phase 2: Source Evaluation & Content Extraction
-For each search result, quickly assess source quality:
-
-**HIGH-PRIORITY Sources (extract immediately):**
-- Government sites (.gov, .gov.uk, .europa.eu)
-- Academic institutions (.edu, .ac.uk, university domains)
-- Peer-reviewed journals (nature.com, sciencedirect.com, ieee.org)
-- Official documentation (docs.*, official product sites)
-- Established news organizations (reuters.com, bbc.com, nytimes.com)
-- Industry-recognized publications
-
-**MEDIUM-PRIORITY Sources (extract if needed):**
-- Well-known tech publications (techcrunch.com, wired.com, arstechnica.com)
-- Reputable blogs with author credentials
-- Company blogs from established organizations
-- Wikipedia (good for overview, verify claims elsewhere)
-
-**LOW-PRIORITY Sources (use cautiously):**
-- Personal blogs without credentials
-- User-generated content sites
-- Sites with excessive ads or clickbait titles
-- Sources without clear authorship
-- Outdated content (check publication dates)
-
-### Phase 3: Content Gathering
-- Extract full content from the **top {expected_total_results} most promising URLs**
-- Prioritize sources that directly address the research objectives
-- Look for primary sources (original research, official docs) over secondary summaries
-- Note publication dates - prefer recent content for evolving topics
-
-## Quality Checkpoints
-Before concluding, verify you have:
-[x] Multiple sources confirming key facts (cross-referencing)
-[x] At least some high-credibility sources in your collection
-[x] Coverage across different aspects of the research objectives
-[x] Both overview content and specific technical details
-
-## Completion Signal
-When you have gathered sufficient high-quality information (aim for {expected_total_results} quality sources with extracted content), respond with:
-
-RESEARCH_COMPLETE: [Summary of what you found, including:
-- Number of sources gathered
-- Key themes discovered
-- Any notable gaps or areas needing more research
-- Confidence level in the gathered information]"""
-        
-        # Create autonomous agent using LangChain's create_agent
-        agent_graph = create_agent(
-            self.llm,
-            self.tools,
-            system_prompt=system_prompt
-        )
-        
-        for attempt in range(self.max_retries):
             try:
-                start_time = time.time()
-                
-                # Prepare input
-                objectives_text = "\n".join(f"- {obj}" for obj in state.plan.objectives)
-                queries_text = "\n".join(
-                    f"- {q.query} (Purpose: {q.purpose})" 
-                    for q in state.plan.search_queries
-                )
-                
-                # Estimate input tokens
-                input_message = f"""## Research Mission Brief
-
-### Topic Under Investigation:
-{state.research_topic}
-
-### Research Objectives (All must be addressed):
-{objectives_text}
-
-### Planned Search Queries (Execute strategically):
-{queries_text}
-
----
-
-### Your Mission:
-1. Execute the search queries above using the web_search tool
-2. Evaluate results for credibility and relevance
-3. Extract full content from the most authoritative sources using extract_webpage_content
-4. Ensure you gather information that addresses ALL research objectives
-5. Prioritize recent, authoritative sources over older or less credible ones
-
-### Quality Targets:
-- Gather from at least {config.max_search_queries * config.max_search_results_per_query} different sources
-- Extract full content from the top 5-8 most relevant pages
-- Ensure coverage across all research objectives
-- Include at least some academic, government, or official documentation sources if available
-
-Begin your systematic research now. Execute searches and extract content until you have comprehensive coverage."""
-                
-                input_tokens = estimate_tokens(input_message)
-                
-                # Execute autonomous research
-                result = await agent_graph.ainvoke({
-                    "messages": [{"role": "user", "content": input_message}]
-                })
-                
-                # Track LLM call (approximation - agent may make multiple calls)
-                duration = time.time() - start_time
-                
-                # Extract messages from result
-                messages = result.get('messages', [])
-                output_text = ""
-                if messages:
-                    output_text = str(messages[-1].content if hasattr(messages[-1], 'content') else str(messages[-1]))
-                
-                output_tokens = estimate_tokens(output_text)
-                
-                # Extract search results from messages
-                # We need to track tool calls and results within the messages
-                search_results = []
-                from src.state import SearchResult
-                
-                for msg in messages:
-                    # Check for tool calls in message
-                    if hasattr(msg, 'tool_calls') and msg.tool_calls:
-                        for tool_call in msg.tool_calls:
-                            if tool_call.get('name') == 'web_search':
-                                # This is a search request, we'll get results in next message
-                                pass
-                    
-                    # Check for tool responses
-                    if hasattr(msg, 'name') and msg.name == 'web_search':
-                        # Parse tool response
-                        try:
-                            content = msg.content
-                            if isinstance(content, str):
-                                import json
-                                tool_results = json.loads(content)
-                            else:
-                                tool_results = content
-                            
-                            if isinstance(tool_results, list):
-                                for item in tool_results:
-                                    if isinstance(item, dict):
-                                        search_results.append(SearchResult(
-                                            query=item.get('query', ''),
-                                            title=item.get('title', ''),
-                                            url=item.get('url', ''),
-                                            snippet=item.get('snippet', ''),
-                                            content=None
-                                        ))
-                        except Exception as e:
-                            logger.warning(f"Error parsing tool result: {e}")
-                    
-                    # Check for content extraction results
-                    if hasattr(msg, 'name') and msg.name == 'extract_webpage_content':
-                        try:
-                            content = msg.content
-                            # Find the corresponding search result and update it
-                            # Note: This is a simplified approach, might need refinement
-                            if search_results and content:
-                                # Update the most recent search result without content
-                                for sr in reversed(search_results):
-                                    if not sr.content:
-                                        sr.content = content
-                                        break
-                        except Exception as e:
-                            logger.warning(f"Error updating content: {e}")
-                
-                logger.info(f"Autonomous agent collected {len(search_results)} results")
-                
-                # Calculate total extracted content
-                total_extracted_chars = sum(
-                    len(r.content) if r.content else 0 
-                    for r in search_results
-                )
-                extracted_count = sum(1 for r in search_results if r.content)
-                
-                # Emit extraction completion
-                await emit_extraction_complete(extracted_count, total_extracted_chars)
-                
-                if not search_results:
-                    await emit_error("Agent did not collect any search results")
-                    raise ValueError("Agent did not collect any search results")
-            
-                # Score all results first
-                scored_results = self.credibility_scorer.score_search_results(search_results)
-                
-                # Filter by minimum credibility score
-                filtered_scored = [
-                    item for item in scored_results
-                    if item['credibility']['score'] >= config.min_credibility_score
-                ]
-                
-                # Extract filtered results and scores (already sorted by score, highest first)
-                credibility_scores = [item['credibility'] for item in filtered_scored]
-                sorted_results = [item['result'] for item in filtered_scored]
-                
-                logger.info(f"Filtered {len(search_results)} -> {len(sorted_results)} results (min_credibility={config.min_credibility_score})")
-                
-                # Mark queries as completed
-                for q in state.plan.search_queries:
-                    q.completed = True
-                
-                call_detail = {
-                    'agent': 'ResearchSearcher',
-                    'operation': 'autonomous_search',
-                    'model': config.model_name,
-                    'input_tokens': input_tokens,
-                    'output_tokens': output_tokens,
-                    'duration': round(duration, 2),
-                    'results_count': len(sorted_results),
-                    'original_results_count': len(search_results),
-                    'min_credibility_score': config.min_credibility_score,
-                    'attempt': attempt + 1
-                }
-                
-                # Return dict updates - LangGraph merges into state
-                return {
-                    "search_results": sorted_results,
-                    "credibility_scores": credibility_scores,
-                    "current_stage": "synthesizing",
-                    "iterations": state.iterations + 1,
-                    "llm_calls": state.llm_calls + 1,
-                    "total_input_tokens": state.total_input_tokens + input_tokens,
-                    "total_output_tokens": state.total_output_tokens + output_tokens,
-                    "llm_call_details": state.llm_call_details + [call_detail]
-                }
-                
+                raw = await search_tool.search_async(query.query)
             except Exception as e:
-                logger.warning(f"Search attempt {attempt + 1} failed: {str(e)}")
-                if attempt == self.max_retries - 1:
-                    logger.error(f"Search failed after {self.max_retries} attempts")
-                    return {
-                        "error": f"Search failed: {str(e)}",
-                        "iterations": state.iterations + 1
-                    }
-                else:
-                    await asyncio.sleep(2 ** attempt)
-        
-        # Fallback if all retries exhausted
-        return {
-            "error": "Search failed: Maximum retries exceeded",
-            "iterations": state.iterations + 1
-        }
+                logger.warning(f"Search failed for '{query.query}': {e}")
+                raw = []
 
+            await emit_search_results(len(raw), i, total_queries)
 
-class ResearchSynthesizer:
-    """Autonomous agent responsible for synthesizing research findings."""
-    
-    def __init__(self):
-        self.llm = get_llm(temperature=0.3, model_override=config.summarization_model)
-        self.tools = get_research_tools(agent_type="synthesis")
-        self.max_retries = 3
-        
-    async def synthesize(self, state: ResearchState) -> dict:
-        """Autonomously synthesize key findings using tools and reasoning.
-        
-        Returns dict with key findings that LangGraph will merge into state.
-        """
-        logger.info(f"Synthesizing findings from {len(state.search_results)} results")
-        
-        if not state.search_results:
-            await emit_error("No search results to synthesize")
-            return {"error": "No search results to synthesize"}
-        
-        # Emit synthesis start
-        await emit_synthesis_start(len(state.search_results))
-        
-        # Create system prompt for autonomous synthesis agent
-        system_prompt = """You are a senior research analyst specializing in synthesizing complex information into accurate, actionable insights. Your task is to analyze search results and extract verified, well-supported findings.
+            # Score credibility and pick top 2 to extract full content
+            scored = []
+            for r in raw:
+                score = self.credibility_scorer.score_url(r.url)
+                if score.get("score", 0) >= config.min_credibility_score:
+                    scored.append((r, score))
+            scored.sort(key=lambda x: x[1].get("score", 0), reverse=True)
 
-## Your Available Tools
-- **extract_insights_from_text(text, focus)**: Extract specific insights from text content
+            for r, score in scored[:2]:
+                await emit_extraction_start(r.url, i, total_queries)
+                try:
+                    extracted = await extractor.extract_content_async(r.url)
+                    if extracted:
+                        r.content = extracted
+                        logger.info(f"Extracted {len(r.content)} chars from {r.url}")
+                except Exception as e:
+                    logger.warning(f"Extraction failed for {r.url}: {e}")
 
-## Source Credibility Framework
+                all_results.append(r)
+                all_scores.append(score)
 
-Each source has a credibility rating. Apply this hierarchy strictly:
+            # Add lower-score results (snippet-only) for breadth
+            for r, score in scored[2:]:
+                all_results.append(r)
+                all_scores.append(score)
 
-### HIGH Credibility (Score >=70) - Primary Sources
-- Government and institutional sources
-- Peer-reviewed research and academic papers
-- Official documentation and specifications
-- Established news organizations with editorial standards
-=> **TRUST**: Use as primary basis for findings
+            await asyncio.sleep(1)  # polite rate limiting between queries
 
-### MEDIUM Credibility (Score 40-69) - Supporting Sources
-- Industry publications and tech blogs
-- Expert commentary and analysis
-- Well-maintained wikis and documentation
-=> **VERIFY**: Cross-reference with HIGH sources; use to add context
-
-### LOW Credibility (Score <40) - Supplementary Only
-- Personal blogs, forums, user comments
-- Sources without clear authorship
-- Outdated or unverified content
-=> **CAUTION**: Only use if corroborated by higher-credibility sources
-
-## Synthesis Methodology
-
-### Step 1: Identify Core Facts
-- What claims appear in multiple HIGH-credibility sources?
-- What are the foundational facts that most sources agree on?
-- Extract specific data points: numbers, dates, names, technical specifications
-
-### Step 2: Detect and Resolve Conflicts
-When sources contradict each other:
-1. Check credibility scores - trust higher-rated sources
-2. Check recency - newer information may supersede older
-3. Check specificity - primary sources trump secondary summaries
-4. If unresolvable, note the disagreement in findings
-
-### Step 3: Synthesize Key Findings
-For each finding, ensure:
-- **Accuracy**: Only include information that appears in the sources
-- **Attribution**: Note which source numbers support the finding [1], [2], etc.
-- **Specificity**: Include concrete details, not vague generalities
-- **Balance**: Present multiple perspectives if sources differ
-
-### Step 4: Quality Control
-Before finalizing, verify:
-[x] No claims are made without source support
-[x] HIGH-credibility sources are prioritized
-[x] Contradictions are acknowledged, not ignored
-[x] Findings directly address research objectives
-[x] Technical accuracy is maintained (don't oversimplify incorrectly)
-[x] Mathematical notation is preserved in standard LaTeX ($...$ or $$...$$) format
-
-## Output Format
-
-Return findings as a JSON array of strings. Each finding should:
-- Be a complete, standalone insight
-- Include source references where applicable
-- Be specific enough to be useful (avoid generic statements)
-- Focus on facts over opinions (unless opinion is from recognized experts)
-
-Example format:
-[
-    "Finding 1: [Specific fact or insight] - supported by sources [1], [3]",
-    "Finding 2: [Technical detail with specifics] - per official documentation [2]",
-    "Finding 3: [Trend or development] - noted across multiple industry sources [4], [5], [6]"
-]
-
-## Anti-Hallucination Rules
-DO NOT invent statistics, dates, or specifics not in sources
-DO NOT make claims beyond what sources support
-DO NOT present speculation as fact
-DO NOT ignore source credibility ratings
-DO say "sources indicate" or "according to [source]" for less certain claims
-DO note when information is limited or conflicting"""
-        
-        # Create autonomous synthesis agent
-        agent_graph = create_agent(
-            self.llm,
-            self.tools,
-            system_prompt=system_prompt
-        )
-        
-        # Progressive truncation strategy
-        max_results = 20
-        
-        for attempt in range(self.max_retries):
-            try:
-                start_time = time.time()
-                
-                # Adjust result count based on attempt
-                current_max = max(5, max_results - (attempt * 5))
-                
-                # Prepare search results text with credibility information
-                results_to_use = state.search_results[:current_max]
-                credibility_scores_to_use = state.credibility_scores[:current_max] if state.credibility_scores else []
-                
-                results_text = "\n\n".join([
-                    f"[{i+1}] {r.title}\n"
-                    f"URL: {r.url}\n"
-                    f"Credibility: {cred.get('level', 'unknown').upper()} (Score: {cred.get('score', 'N/A')}/100) - {', '.join(cred.get('factors', []))}\n"
-                    f"Snippet: {r.snippet}\n" +
-                    (f"Content: {r.content[:300]}..." if r.content else "")
-                    for i, (r, cred) in enumerate(zip(results_to_use, credibility_scores_to_use))
-                ])
-                
-                # If credibility scores don't match (shouldn't happen, but handle gracefully)
-                if len(results_to_use) != len(credibility_scores_to_use):
-                    # Fallback: format without credibility if mismatch
-                    results_text = "\n\n".join([
-                        f"[{i+1}] {r.title}\nURL: {r.url}\nSnippet: {r.snippet}\n" +
-                        (f"Content: {r.content[:300]}..." if r.content else "")
-                        for i, r in enumerate(results_to_use)
-                    ])
-                
-                # Prepare input message for the autonomous agent
-                input_message = f"""## Research Synthesis Task
-
-### Topic: {state.research_topic}
-
-### Your Mission:
-Analyze the search results below and extract the most important, accurate, and well-supported findings.
-
----
-
-### Search Results with Credibility Scores:
-{results_text}
-
----
-
-### Synthesis Instructions:
-
-1. **Extract Key Facts**: Identify the core factual claims across sources
-2. **Cross-Reference**: Note which findings are supported by multiple sources
-3. **Resolve Conflicts**: When sources disagree, trust higher-credibility sources
-4. **Maintain Specificity**: Include specific details, numbers, and technical information
-5. **Note Limitations**: Flag areas where information is sparse or contradictory
-
-### Output Requirements:
-Return a JSON array of 10-15 key findings. Each finding should:
-- Be a complete, specific statement (not vague generalizations)
-- Reference source numbers when citing facts: "...according to [1]" or "...per [3], [5]"
-- Focus on facts that directly address the research topic
-- Prioritize findings from HIGH-credibility sources
-
-Example format:
-[
-    "The technology uses [specific mechanism] to achieve [specific outcome], enabling [specific capability] [1]",
-    "According to official documentation [2], the key components include: [list specific items]",
-    "Industry adoption has grown to [specific metric], with major deployments at [specific examples] [3], [5]",
-    "Experts note challenges including [specific challenge 1] and [specific challenge 2] [4]"
-]
-
-Analyze the sources now and extract your findings:"""
-                
-                # Estimate input tokens
-                input_tokens = estimate_tokens(input_message)
-                
-                # Execute autonomous synthesis
-                result = await agent_graph.ainvoke({
-                    "messages": [{"role": "user", "content": input_message}]
-                })
-                
-                # Track LLM call
-                duration = time.time() - start_time
-                
-                # Extract final response
-                messages = result.get('messages', [])
-                output_text = ""
-                if messages:
-                    last_msg = messages[-1]
-                    output_text = str(last_msg.content if hasattr(last_msg, 'content') else str(last_msg))
-                
-                output_tokens = estimate_tokens(output_text)
-                
-                call_detail = {
-                    'agent': 'ResearchSynthesizer',
-                    'operation': 'autonomous_synthesis',
-                    'model': config.summarization_model,
-                    'input_tokens': input_tokens,
-                    'output_tokens': output_tokens,
-                    'duration': round(duration, 2),
-                    'attempt': attempt + 1
-                }
-                
-                # Parse the JSON response
-                import json
-                import re
-                
-                # Try to extract JSON array from the response
-                json_match = re.search(r'\[(.*?)\]', output_text, re.DOTALL)
-                
-                key_findings = []
-                if json_match:
-                    try:
-                        findings = json.loads(json_match.group(0))
-                        if isinstance(findings, list):
-                            key_findings = [
-                                str(f)  # Convert all items to strings (handles int, dict, etc.)
-                                for f in findings
-                            ]
-                        else:
-                            key_findings = [str(findings)]
-                    except json.JSONDecodeError:
-                        pass
-                
-                # If JSON parsing failed or empty, use fallback extraction
-                if not key_findings:
-                    # Look for bullet points or numbered items
-                    lines = output_text.split('\n')
-                    for line in lines:
-                        line = line.strip().lstrip('-').lstrip('*').lstrip('>').strip()
-                        # Remove numbering like "1.", "2.", etc.
-                        line = re.sub(r'^\d+\.\s*', '', line)
-                        if len(line) > 30 and not line.startswith('[') and not line.startswith(']'):
-                            key_findings.append(line)
+        logger.info(f"Search complete: {len(all_results)} results, "
+                    f"{sum(1 for r in all_results if r.content)} with full content")
                     
-                    # Limit to reasonable number
-                    key_findings = key_findings[:15]
-                
-                # If still empty, create basic findings from search results
-                if not key_findings and state.search_results:
-                    logger.warning("Agent produced no findings, creating basic ones from results")
-                    key_findings = [
-                        f"{r.title}: {r.snippet[:100]}..."
-                        for r in state.search_results[:10]
-                        if r.snippet
-                    ]
-                
-                logger.info(f"Extracted {len(key_findings)} key findings")
-                
-                # Emit synthesis completion
-                await emit_synthesis_complete(len(key_findings))
-                
-                # Return dict updates - LangGraph merges into state
-                return {
-                    "key_findings": key_findings,
-                    "current_stage": "reporting",
-                    "iterations": state.iterations + 1,
-                    "llm_calls": state.llm_calls + 1,
-                    "total_input_tokens": state.total_input_tokens + input_tokens,
-                    "total_output_tokens": state.total_output_tokens + output_tokens,
-                    "llm_call_details": state.llm_call_details + [call_detail]
-                }
-                
-            except Exception as e:
-                logger.warning(f"Synthesis attempt {attempt + 1} failed: {str(e)}")
-                if attempt == self.max_retries - 1:
-                    logger.error(f"Synthesis failed after {self.max_retries} attempts")
-                    return {
-                        "error": f"Synthesis failed: {str(e)}",
-                        "iterations": state.iterations + 1
-                    }
-                else:
-                    await asyncio.sleep(2 ** attempt)
-        
-        # Fallback if all retries exhausted
+        extracted_count = sum(1 for r in all_results if r.content)
+        total_extracted_chars = sum(len(r.content) for r in all_results if r.content)
+        await emit_extraction_complete(extracted_count, total_extracted_chars)
+
         return {
-            "error": "Synthesis failed: Maximum retries exceeded",
-            "iterations": state.iterations + 1
+            "search_results": all_results,
+            "credibility_scores": all_scores,
+            "current_stage": "writing",
+            "iterations": state.iterations + 1,
         }
 
 
@@ -846,7 +333,7 @@ class ReportWriter:
         """
         logger.info("Writing final report")
         
-        if not state.plan or not state.key_findings:
+        if not state.plan or not state.search_results:
             await emit_error("Insufficient data for report generation")
             return {"error": "Insufficient data for report generation"}
         
@@ -872,7 +359,6 @@ class ReportWriter:
                     section, section_tokens = await self._write_section(
                         state.research_topic,
                         section_title,
-                        state.key_findings,
                         state.search_results
                     )
                     if section:
@@ -960,7 +446,6 @@ class ReportWriter:
         self,
         topic: str,
         section_title: str,
-        findings: List[str],
         search_results: List
     ) -> tuple:
         """Autonomously write a single report section using tools."""
@@ -1000,7 +485,7 @@ class ReportWriter:
 ## Critical Accuracy Rules
 
 ### DO
-- Base all claims on the provided key findings
+- Base all claims on the provided source materials
 - Cite sources for factual statements: "According to [1]..." or "Research indicates [2]..."
 - Distinguish between established facts and emerging trends
 - Note limitations or caveats when relevant
@@ -1008,7 +493,7 @@ class ReportWriter:
 - Acknowledge when evidence is limited: "Available data suggests..."
 
 ### DO NOT
-- Invent statistics, percentages, or specific numbers not in findings
+- Invent statistics, percentages, or specific numbers not in the sources
 - Make claims that go beyond the provided information
 - Present opinions as facts without attribution
 - Ignore contradictions between sources
@@ -1059,10 +544,13 @@ Example structure:
             # Prepare input message with source context
             sources_context = ""
             if search_results:
-                sources_context = "\n\nAvailable Sources for Citation:\n" + "\n".join(
-                    f"[{i+1}] {r.title} ({r.url})"
-                    for i, r in enumerate(search_results[:15])  # Top 15 sources
-                )
+                sources_context_lines = []
+                for i, r in enumerate(search_results[:10]):
+                    content = r.content if hasattr(r, 'content') and r.content else getattr(r, 'snippet', '')
+                    if len(content) > 30000:
+                        content = content[:30000] + "... [truncated]"
+                    sources_context_lines.append(f"[{i+1}] {getattr(r, 'title', 'Unknown')} ({getattr(r, 'url', 'Unknown')})\n{content}\n")
+                sources_context = "\n\nAvailable Sources for Citation:\n" + "\n".join(sources_context_lines)
             
             input_message = f"""## Assignment: Write Report Section
 
@@ -1072,16 +560,14 @@ Example structure:
 
 ---
 
-### Key Findings to Incorporate:
-{chr(10).join(f"- {f}" for f in findings)}
-
+### Source Materials to Synthesize:
 {sources_context}
 
 ---
 
 ### Instructions:
 1. Write a comprehensive section that covers the topic "{section_title}" thoroughly
-2. Incorporate the key findings above, adding context and explanation
+2. Synthesize the provided source materials, extracting the most critical facts, adding context and explanation
 3. Use inline citations [1], [2], etc. when referencing specific facts from sources
 4. Maintain academic rigor while being accessible to general readers
 5. Use markdown formatting for structure (bold, lists, subheadings as needed)
@@ -1118,13 +604,8 @@ Write the section content now:"""
             # Validate content is not empty
             if not content or len(content.strip()) < 50:
                 logger.warning(f"Section '{section_title}' generated insufficient content: {len(content)} chars")
-                # Try to generate a basic section from findings if agent failed
-                if findings:
-                    logger.info(f"Creating fallback content for section '{section_title}'")
-                    content = f"\n\n{chr(10).join(findings[:3])}\n\n"
-                else:
-                    logger.error(f"Cannot create section '{section_title}' - no content and no findings")
-                    return None, None
+                logger.error(f"Cannot create section '{section_title}' - no content")
+                return None, None
             
             # Extract cited sources
             import re

@@ -16,7 +16,6 @@ class ResearchStage(Enum):
     PLANNING = "planning"
     SEARCHING = "searching"
     EXTRACTING = "extracting"
-    SYNTHESIZING = "synthesizing"
     WRITING = "writing"
     COMPLETE = "complete"
     ERROR = "error"
@@ -212,34 +211,6 @@ async def emit_extraction_complete(num_extracted: int, total_chars: int):
         progress_pct=65
     )
 
-
-async def emit_synthesis_start(num_sources: int):
-    """Emit synthesis stage start."""
-    await emit_progress(
-        ResearchStage.SYNTHESIZING,
-        "Analyzing sources",
-        f"Synthesizing {num_sources} sources into key findings",
-        progress_pct=68
-    )
-
-
-async def emit_synthesis_progress(message: str):
-    """Emit synthesis progress."""
-    await emit_progress(
-        ResearchStage.SYNTHESIZING,
-        message,
-        progress_pct=72
-    )
-
-
-async def emit_synthesis_complete(num_findings: int):
-    """Emit synthesis completion."""
-    await emit_progress(
-        ResearchStage.SYNTHESIZING,
-        "Synthesis complete",
-        f"Extracted {num_findings} key findings",
-        progress_pct=78
-    )
 
 
 async def emit_writing_start(num_sections: int):

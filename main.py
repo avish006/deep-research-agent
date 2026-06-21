@@ -10,6 +10,9 @@ import logging
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
 sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
+import warnings
+warnings.filterwarnings("ignore", category=RuntimeWarning, module="asyncio")
+
 from src.config import config
 from src.graph import run_research
 

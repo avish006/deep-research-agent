@@ -6,29 +6,19 @@ import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import './index.css';
 
-// ── Free OpenRouter models (verified live from openrouter.ai/api/v1/models) ──
-const FREE_MODELS = [
-  { id: 'meta-llama/llama-3.3-70b-instruct:free',         label: 'Llama 3.3 70B  ·  Meta' },
-  { id: 'nvidia/nemotron-3-super-120b-a12b:free',          label: 'Nemotron 3 Super 120B  ·  NVIDIA' },
-  { id: 'google/gemma-4-31b-it:free',                      label: 'Gemma 4 31B  ·  Google' },
-  { id: 'qwen/qwen3-next-80b-a3b-instruct:free',           label: 'Qwen3 80B  ·  Alibaba' },
-  { id: 'nousresearch/hermes-3-llama-3.1-405b:free',       label: 'Hermes 3 405B  ·  NousResearch' },
-  { id: 'meta-llama/llama-3.2-3b-instruct:free',           label: 'Llama 3.2 3B  ·  Meta (fast)' },
-  { id: 'openai/gpt-oss-20b:free',                         label: 'GPT-OSS 20B  ·  OpenAI' },
-];
 
 // ── Stage detection ───────────────────────────────────────────────────────────
 const STAGES = [
   { id: 'planning',     label: 'Planning research strategy',    pct: 15 },
   { id: 'searching',    label: 'Searching & extracting sources', pct: 45 },
-  { id: 'synthesizing', label: 'Synthesizing findings',          pct: 75 },
+
   { id: 'writing',      label: 'Writing report sections',        pct: 90 },
 ];
 
 function detectStage(line) {
   if (/\[planning\]/i.test(line))     return 'planning';
   if (/\[searching\]|\[extracting\]/i.test(line)) return 'searching';
-  if (/\[synthesizing\]/i.test(line)) return 'synthesizing';
+
   if (/\[writing\]/i.test(line))      return 'writing';
   return null;
 }
@@ -89,57 +79,46 @@ function HowToUsePage() {
   const steps = [
     {
       num: '01',
-      title: 'Create a free OpenRouter account',
-      body: 'Go to openrouter.ai and sign up for a free account. No credit card is required to start.',
-      link: { href: 'https://openrouter.ai', label: 'Sign up at openrouter.ai →' },
+      title: 'Get a Google Gemini API Key',
+      body: 'Go to Google AI Studio and sign in with your Google account. Click "Get API Key" to generate a free key. It provides an extremely generous free tier for Gemini 3.5 Flash.',
+      link: { href: 'https://aistudio.google.com/app/apikey', label: 'Get API Key at AI Studio →' },
       accent: '#60A5FA',
     },
     {
       num: '02',
-      title: 'Generate your free API key',
-      body: 'After logging in, go to openrouter.ai/keys and click "Create Key". Give it any name and copy the key — it starts with sk-or-…',
-      link: { href: 'https://openrouter.ai/keys', label: 'Go to openrouter.ai/keys →' },
-      accent: '#3DD68C',
+      title: 'Enter your key in the sidebar',
+      body: 'Paste your generated API key (starts with AIza...) into the settings panel on the bottom left. The key never leaves your browser except to query the agent backend securely.',
+      link: null,
+      accent: '#34D399',
     },
     {
       num: '03',
-      title: 'Paste your key in the sidebar',
-      body: 'Back in this app, paste your sk-or-… key into the "OpenRouter API Key" field in the left sidebar. It is saved locally in your browser.',
+      title: 'Run a deep research topic',
+      body: 'Type a broad, complex topic into the search bar. The agent will autonomously break it down, browse the web, extract data, and write a comprehensive report.',
+      link: null,
       accent: '#A78BFA',
-    },
-    {
-      num: '04',
-      title: 'Choose a free model',
-      body: 'Pick any model from the "Model" dropdown. All listed models are 100% free on OpenRouter — no billing needed. Larger models produce deeper reports.',
-      accent: '#F59E0B',
-    },
-    {
-      num: '05',
-      title: 'Enter your research topic & go!',
-      body: 'Type any topic into the search bar at the bottom and press Enter. The agent will autonomously plan, search the web, synthesize findings, and generate a full cited report in minutes.',
-      accent: '#3DD68C',
-    },
+    }
   ];
 
   const faqs = [
-    { q: 'Is this really free?', a: 'Yes. OpenRouter offers free-tier access to several capable open-source models with no credit card required.' },
-    { q: 'Is my API key safe?', a: 'Your key is stored only in your browser\'s localStorage. It is never sent to any third-party server — only to OpenRouter\'s own API via this app.' },
-    { q: 'Why is the report taking a while?', a: 'Deep research is multi-step: planning → searching → extracting → synthesizing → writing. Free model rate limits can add some wait time. Larger models are slower but produce richer results.' },
-    { q: 'Can I use a paid model?', a: 'Yes! Any OpenRouter model ID works. Just select "Custom" (or edit the URL) and paste any model ID from openrouter.ai/models.' },
+    { q: 'Is it completely free?', a: 'Yes. Google AI Studio provides Gemini 3.5 Flash for free, allowing massive reports without paying.' },
+    { q: 'Are my API keys safe?', a: 'Yes. Your key is saved locally in your browser (localStorage) and is only sent to our backend to authenticate your specific research session.' },
+    { q: 'How long does a report take?', a: 'Because the agent conducts 5+ iterative web searches and reads entire pages, a full report typically takes 1 to 3 minutes to compile.' },
+    { q: 'Can I export the report?', a: 'Yes! Once the research finishes, a Download PDF/Markdown button will appear at the bottom of the document.' },
   ];
 
   return (
     <div className="howto-page">
       <div className="howto-hero">
-        <div className="howto-badge">Setup Guide</div>
-        <h1>Get started in 5 minutes</h1>
-        <p>Deep Research Agent uses OpenRouter to access powerful AI models for free. Here's how to set it up.</p>
+        <span className="howto-badge">Setup Guide</span>
+        <h1>How to use Deep Research</h1>
+        <p>Get started with completely autonomous AI research in less than 2 minutes using Google's generous free tier.</p>
       </div>
 
       <div className="howto-steps">
-        {steps.map(s => (
-          <div className="howto-step" key={s.num}>
-            <div className="howto-step-num" style={{ color: s.accent, borderColor: s.accent + '33' }}>{s.num}</div>
+        {steps.map((s, i) => (
+          <div className="howto-step" key={i}>
+            <div className="howto-step-num" style={{ borderColor: s.accent, color: s.accent }}>{s.num}</div>
             <div className="howto-step-body">
               <h3>{s.title}</h3>
               <p>{s.body}</p>
@@ -154,10 +133,10 @@ function HowToUsePage() {
       </div>
 
       <div className="howto-faq">
-        <h2>Frequently asked questions</h2>
+        <h2>Frequently Asked Questions</h2>
         <div className="faq-grid">
-          {faqs.map(f => (
-            <div className="faq-card" key={f.q}>
+          {faqs.map((f, i) => (
+            <div className="faq-card" key={i}>
               <h4>{f.q}</h4>
               <p>{f.a}</p>
             </div>
@@ -165,30 +144,14 @@ function HowToUsePage() {
         </div>
       </div>
 
-      <div className="howto-models">
-        <h2>Available free models</h2>
-        <p className="howto-models-sub">All models below are confirmed free on OpenRouter as of June 2025.</p>
-        <div className="models-table">
-          <div className="models-row models-header">
-            <span>Model</span>
-            <span>Provider</span>
-            <span>Best for</span>
-          </div>
-          {[
-            ['Llama 3.3 70B', 'Meta', 'Balanced quality + speed'],
-            ['Nemotron 3 Super 120B', 'NVIDIA', 'Deep, nuanced research'],
-            ['Gemma 4 31B', 'Google', 'Structured reports'],
-            ['Qwen3 80B', 'Alibaba', 'Technical topics'],
-            ['Hermes 3 405B', 'NousResearch', 'Highest quality (slower)'],
-            ['GPT-OSS 20B', 'OpenAI', 'Fast responses'],
-            ['Llama 3.2 3B', 'Meta', 'Quick drafts (fastest)'],
-          ].map(([name, provider, best]) => (
-            <div className="models-row" key={name}>
-              <span className="model-name-cell">{name}</span>
-              <span>{provider}</span>
-              <span className="model-best-cell">{best}</span>
-            </div>
-          ))}
+      <div className="howto-troubleshooting">
+        <h2>Troubleshooting</h2>
+        <div className="troubleshoot-card">
+          <h4>Research failed / "429 Too Many Requests"</h4>
+          <p>
+            If your live traces show "Too Many Requests" or the research fails unexpectedly, you have likely hit Google's daily free-tier quota limits for your account. 
+            To fix this, simply log out of AI Studio, <strong>log in using a different Google account</strong>, generate a brand new API key, and paste it into the sidebar!
+          </p>
         </div>
       </div>
     </div>
@@ -201,7 +164,7 @@ function MetricsBar({ metrics }) {
     { label: 'Queries Run',     value: metrics.searches       || '–', icon: '⌕' },
     { label: 'Pages Extracted', value: metrics.pagesExtracted || '–', icon: '⇩' },
     { label: 'Sources Indexed', value: metrics.sourcesFound   || '–', icon: '◉' },
-    { label: 'Key Findings',    value: metrics.findings       || '–', icon: '◆' },
+
     { label: 'Report Words',    value: (metrics.wordCount || 0).toLocaleString(), icon: '📄' },
     { label: 'Total Time',      value: metrics.minutes + ' min', icon: '⏱' },
   ];
@@ -321,9 +284,8 @@ export default function App() {
   const [view, setView]           = useState('chat'); // 'chat' | 'howto'
 
   // Settings — persisted in localStorage
-  const [apiKey, setApiKey]           = useState(() => localStorage.getItem('or_api_key') || '');
-  const [selectedModel, setSelectedModel] = useState(
-    () => localStorage.getItem('or_model') || FREE_MODELS[0].id
+  const [apiKey, setApiKey] = useState(
+    () => localStorage.getItem('gemini_api_key') || ''
   );
   const [showKey, setShowKey] = useState(false);
 
@@ -334,8 +296,7 @@ export default function App() {
   const activeSession = sessions.find(s => s.id === activeId);
 
   // Persist settings
-  useEffect(() => { localStorage.setItem('or_api_key', apiKey); }, [apiKey]);
-  useEffect(() => { localStorage.setItem('or_model', selectedModel); }, [selectedModel]);
+  useEffect(() => { localStorage.setItem('gemini_api_key', apiKey); }, [apiKey]);
 
   useEffect(() => {
     if (chatBodyRef.current) chatBodyRef.current.scrollTop = chatBodyRef.current.scrollHeight;
@@ -356,7 +317,7 @@ export default function App() {
 
   const handleSubmit = () => {
     if (!input.trim() || status === 'working') return;
-    if (!apiKey.trim()) { alert('Please enter your OpenRouter API key in the sidebar first.'); return; }
+    if (!apiKey.trim()) { alert('Please enter your Gemini API key in the sidebar first.'); return; }
     const topic = input.trim();
     setInput('');
     const id = Date.now().toString();
@@ -371,7 +332,7 @@ export default function App() {
     setTraceOpen(true);
     setView('chat');
 
-    const url = `/api/research/stream?topic=${encodeURIComponent(topic)}&apiKey=${encodeURIComponent(apiKey)}&model=${encodeURIComponent(selectedModel)}`;
+    const url = `/api/research/stream?topic=${encodeURIComponent(topic)}&apiKey=${encodeURIComponent(apiKey)}`;
     const es = new EventSource(url);
     esRef.current = es;
 
@@ -473,21 +434,17 @@ export default function App() {
 
         {/* ── Settings panel ── */}
         <div className="settings-panel">
-          <div className="settings-label">OpenRouter API Key</div>
+          <div className="settings-label">API Configuration</div>
           <div className="api-key-field">
-            <input
-              type={showKey ? 'text' : 'password'}
-              placeholder="sk-or-v1-…"
-              value={apiKey}
+            <input 
+              type={showKey ? "text" : "password"} 
+              className={`api-key-input ${apiKey ? 'valid' : 'warn'}`}
+              placeholder="Enter Gemini API Key..." 
+              value={apiKey} 
               onChange={e => setApiKey(e.target.value)}
-              className={`api-key-input ${apiKey ? (apiKey.startsWith('sk-or') ? 'valid' : 'warn') : ''}`}
-              spellCheck={false}
             />
-            <button className="show-key-btn" onClick={() => setShowKey(v => !v)} title={showKey ? 'Hide key' : 'Show key'}>
-              {showKey
-                ? <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" /><line x1="1" y1="1" x2="23" y2="23" /></svg>
-                : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
-              }
+            <button className="show-key-btn" onClick={() => setShowKey(!showKey)} title="Toggle visibility">
+              {showKey ? 'Hide' : 'Show'}
             </button>
           </div>
           {!apiKey && (
@@ -495,23 +452,12 @@ export default function App() {
               No key? Get one free →
             </a>
           )}
-          {apiKey && !apiKey.startsWith('sk-or') && (
-            <span className="settings-warn">Key should start with sk-or-…</span>
-          )}
-
-          <div className="settings-label" style={{ marginTop: 14 }}>Model</div>
-          <select className="model-select" value={selectedModel} onChange={e => setSelectedModel(e.target.value)}>
-            {FREE_MODELS.map(m => (
-              <option key={m.id} value={m.id}>{m.label}</option>
-            ))}
-          </select>
-          <div className="settings-hint-static">All models are free on OpenRouter</div>
         </div>
 
         <div className="sidebar-footer">
           <div className="model-badge">
             <div className={`model-dot ${canResearch ? '' : 'inactive'}`} />
-            <span>{canResearch ? 'OpenRouter · Ready' : 'API key required'}</span>
+            <span>{canResearch ? 'Gemini · Ready' : 'API key required'}</span>
           </div>
         </div>
       </aside>
@@ -556,7 +502,7 @@ export default function App() {
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                         <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
                       </svg>
-                      Enter your OpenRouter API key in the sidebar to start.&nbsp;
+                      Enter your Gemini API key in the sidebar to start.&nbsp;
                       <button className="hero-link-btn" onClick={() => setView('howto')}>How to get one →</button>
                     </div>
                   )}
@@ -589,7 +535,7 @@ export default function App() {
                       Research Agent
                     </div>
 
-                    {!activeSession.report && !activeSession.error && (
+                    {(!activeSession.report) && (
                       <ProgressPanel stageId={stageId} pct={progress} logs={logs}
                         traceOpen={traceOpen} setTraceOpen={setTraceOpen} />
                     )}

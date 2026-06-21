@@ -13,28 +13,14 @@ load_dotenv(dotenv_path=env_path)
 class ResearchConfig(BaseModel):
     """Configuration for the research agent."""
 
-    # OpenRouter API key — can be supplied via env var (overrides .env)
-    openrouter_api_key: str = Field(
-        default_factory=lambda: os.getenv("OPENROUTER_API_KEY", ""),
-        description="OpenRouter API key (required)"
+    # Google Gemini API key
+    google_api_key: str = Field(
+        default_factory=lambda: os.getenv("GOOGLE_API_KEY", ""),
+        description="Google Gemini API key (required)"
     )
 
-    # Model name to use via OpenRouter
-    model_name: str = Field(
-        default=os.getenv("MODEL_NAME", "meta-llama/llama-3.3-70b-instruct:free"),
-        description="OpenRouter model ID to use for research and generation"
-    )
-
-    summarization_model: str = Field(
-        default=os.getenv("SUMMARIZATION_MODEL", "meta-llama/llama-3.3-70b-instruct:free"),
-        description="OpenRouter model ID for summarizing search results"
-    )
-
-    # OpenRouter API base URL
-    openrouter_base_url: str = Field(
-        default="https://openrouter.ai/api/v1",
-        description="OpenRouter API base URL"
-    )
+    # Hardcoded to Google's most generous free model
+    model_name: str = "gemini-3.5-flash"
 
     # Search Configuration
     max_search_queries: int = Field(
@@ -69,7 +55,6 @@ class ResearchConfig(BaseModel):
         description="Minimum words per section"
     )
 
-    # Citation Configuration
     citation_style: str = Field(
         default=os.getenv("CITATION_STYLE", "ieee"),
         description="Citation style (apa, mla, chicago, ieee)"
@@ -77,10 +62,10 @@ class ResearchConfig(BaseModel):
 
     def validate_config(self) -> bool:
         """Validate that required configuration is present."""
-        if not self.openrouter_api_key:
+        if not self.google_api_key:
             raise ValueError(
-                "OPENROUTER_API_KEY is required. "
-                "Get a free key at https://openrouter.ai/keys"
+                "GOOGLE_API_KEY is required. "
+                "Get a free key at https://aistudio.google.com/app/apikey"
             )
         return True
 

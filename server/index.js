@@ -20,15 +20,14 @@ function getSafeTopicFilename(topic) {
 }
 
 // ── Research SSE endpoint ─────────────────────────────────────────────────────
-// Query params: topic (required), apiKey (required), model (required)
+// Query params: topic (required), apiKey (required)
 app.get('/api/research/stream', (req, res) => {
-    const { topic, apiKey, model } = req.query;
+    const { topic, apiKey } = req.query;
 
     if (!topic)  return res.status(400).json({ error: 'topic is required' });
     if (!apiKey) return res.status(400).json({ error: 'apiKey is required' });
-    if (!model)  return res.status(400).json({ error: 'model is required' });
 
-    console.log(`[SSE] Starting research: "${topic}" | model: ${model}`);
+    console.log(`[SSE] Starting research: "${topic}"`);
 
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
@@ -56,9 +55,7 @@ app.get('/api/research/stream', (req, res) => {
         cwd: projectRoot,
         env: {
             ...process.env,
-            OPENROUTER_API_KEY:       apiKey,
-            MODEL_NAME:               model,
-            SUMMARIZATION_MODEL:      model,
+            GOOGLE_API_KEY:           apiKey,
             PYTHONIOENCODING:         'utf-8',
             PYTHONUTF8:               '1',
         }

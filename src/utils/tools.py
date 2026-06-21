@@ -582,9 +582,6 @@ research_search_tools = [
     extract_webpage_content
 ]
 
-synthesis_tools = [
-    extract_insights_from_text
-]
 
 writing_tools = [
     format_citation,
@@ -610,14 +607,13 @@ def get_research_tools(agent_type: str = "search") -> List:
     """Get research tools for a specific agent type.
     
     Args:
-        agent_type: Type of agent ("search", "synthesis", "writing", "planning", "all")
+        agent_type: Type of agent ("search", "writing", "planning", "all")
         
     Returns:
         List of LangChain tool objects for that agent
     """
     tools_map = {
         "search": research_search_tools,
-        "synthesis": synthesis_tools,
         "writing": writing_tools,
         "planning": planning_tools,
         "all": all_research_tools

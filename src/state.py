@@ -71,7 +71,7 @@ class ResearchState(BaseModel):
     
     # Workflow control
     current_stage: Literal[
-        "planning", "searching", "synthesizing", "reporting", "complete"
+        "planning", "searching", "writing", "complete"
     ] = Field(default="planning")
     
     error: Optional[str] = Field(default=None, description="Error message if any")

@@ -6,7 +6,7 @@ This is the recommended pattern per LangGraph documentation.
 
 from langgraph.graph import StateGraph, START, END
 from src.state import ResearchState
-from src.agents import ResearchPlanner, ResearchSearcher, ResearchSynthesizer, ReportWriter
+from src.agents import ResearchPlanner, ResearchSearcher, ReportWriter
 from src.utils.cache import ResearchCache
 from src.config import config
 import logging
@@ -21,7 +21,6 @@ def create_research_graph():
     # Initialize agents
     planner = ResearchPlanner()
     searcher = ResearchSearcher()
-    synthesizer = ResearchSynthesizer()
     writer = ReportWriter(citation_style=config.citation_style)
     
     # Define the graph
@@ -30,7 +29,6 @@ def create_research_graph():
     # Add nodes - functions return dicts that LangGraph merges into state
     workflow.add_node("plan", planner.plan)
     workflow.add_node("search", searcher.search)
-    workflow.add_node("synthesize", synthesizer.synthesize)
     workflow.add_node("write_report", writer.write_report)
     
     # Define entry point using START constant (v1.0 best practice)
@@ -58,9 +56,9 @@ def create_research_graph():
         
         if not state.search_results:
             logger.warning("No search results found")
-            state.error = "No search results available for synthesis"
+            state.error = "Failed to find any relevant search results"
             return END
-        
+            
         # Check minimum threshold
         if len(state.search_results) < 2:
             logger.warning(f"Insufficient search results: {len(state.search_results)}")
@@ -68,20 +66,6 @@ def create_research_graph():
             return END
             
         logger.info(f"Search validated: {len(state.search_results)} results")
-        return "synthesize"
-    
-    def should_continue_after_synthesize(state: ResearchState) -> str:
-        """Validate synthesis output and route appropriately."""
-        if state.error:
-            logger.error(f"Synthesis failed: {state.error}")
-            return END
-        
-        if not state.key_findings:
-            logger.warning("No key findings extracted")
-            state.error = "Failed to extract findings from search results"
-            return END
-        
-        logger.info(f"Synthesis validated: {len(state.key_findings)} findings")
         return "write_report"
     
     def should_continue_after_report(state: ResearchState) -> str:
@@ -109,15 +93,6 @@ def create_research_graph():
     workflow.add_conditional_edges(
         "search",
         should_continue_after_search,
-        {
-            "synthesize": "synthesize",
-            END: END
-        }
-    )
-    
-    workflow.add_conditional_edges(
-        "synthesize",
-        should_continue_after_synthesize,
         {
             "write_report": "write_report",
             END: END
