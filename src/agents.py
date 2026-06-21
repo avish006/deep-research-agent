@@ -43,6 +43,7 @@ def get_llm(temperature: float = 0.7, model_override: str = None):
         base_url=config.openrouter_base_url,
         api_key=config.openrouter_api_key,
         temperature=temperature,
+        max_retries=10,
         default_headers={
             "HTTP-Referer": "https://deep-research-agent.app",
             "X-Title": "Deep Research Agent",
@@ -881,6 +882,10 @@ class ReportWriter:
                             report_input_tokens += section_tokens['input_tokens']
                             report_output_tokens += section_tokens['output_tokens']
                             report_call_details.append(section_tokens)
+                    
+                    # Add a 4 second delay between sections to avoid OpenRouter free-tier rate limits
+                    if section_idx < total_sections:
+                        await asyncio.sleep(4)
                 
                 # Validate minimum quality
                 if not report_sections:

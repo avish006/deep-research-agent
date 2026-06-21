@@ -48,7 +48,7 @@ class ResearchConfig(BaseModel):
     )
 
     max_parallel_searches: int = Field(
-        default=int(os.getenv("MAX_PARALLEL_SEARCHES", "3")),
+        default=int(os.getenv("MAX_PARALLEL_SEARCHES", "1")),
         description="Maximum number of parallel search operations"
     )
 
