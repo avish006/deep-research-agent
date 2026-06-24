@@ -80,7 +80,7 @@ function HowToUsePage() {
     {
       num: '01',
       title: 'Get a Google Gemini API Key',
-      body: 'Go to Google AI Studio and sign in with your Google account. Click "Get API Key" to generate a free key. It provides an extremely generous free tier for Gemini 3.5 Flash.',
+      body: 'Go to Google AI Studio and sign in with your Google account. Click "Get API Key" to generate a free key. It provides an extremely generous free tier for Gemma 4 31B.',
       link: { href: 'https://aistudio.google.com/app/apikey', label: 'Get API Key at AI Studio →' },
       accent: '#60A5FA',
     },
@@ -101,7 +101,7 @@ function HowToUsePage() {
   ];
 
   const faqs = [
-    { q: 'Is it completely free?', a: 'Yes. Google AI Studio provides Gemini 3.5 Flash for free, allowing massive reports without paying.' },
+    { q: 'Is it completely free?', a: 'Yes. Google AI Studio provides Gemma 4 31B for free, allowing massive reports without paying.' },
     { q: 'Are my API keys safe?', a: 'Yes. Your key is saved locally in your browser (localStorage) and is only sent to our backend to authenticate your specific research session.' },
     { q: 'How long does a report take?', a: 'Because the agent conducts 5+ iterative web searches and reads entire pages, a full report typically takes 1 to 3 minutes to compile.' },
     { q: 'Can I export the report?', a: 'Yes! Once the research finishes, a Download PDF/Markdown button will appear at the bottom of the document.' },
