@@ -5,7 +5,7 @@
 
 Deep Research Agent is a fully autonomous, multi-agent AI system designed to conduct comprehensive, deep-dive web research on complex topics. Give it a broad topic, and it will independently formulate a research plan, browse the internet, extract relevant data from credible sources, and synthesize its findings into a massive, heavily-detailed Markdown report.
 
-Built with performance and API efficiency in mind, the agent operates entirely on Google's generous **Gemini 3.5 Flash** free tier, enabling extensive research runs at zero cost.
+Built with performance and API efficiency in mind, the agent operates entirely on Google's generous **Gemma 4 31B** free tier, enabling extensive research runs at zero cost.
 
 ---
 
@@ -63,7 +63,7 @@ graph TD
 * Node.js + Express (Process Manager / API)
 * Python 3.11
 * LangGraph (Agentic Workflow Routing)
-* `google-genai` (Gemini 3.5 Flash)
+* `google-genai` (Gemma 431B)
 * `beautifulsoup4` & `requests` (Web Scraping)
 
 **Deployment:**
