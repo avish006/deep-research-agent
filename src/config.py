@@ -20,7 +20,7 @@ class ResearchConfig(BaseModel):
     )
 
     # Hardcoded to Google's most generous free model
-    model_name: str = "gemini-2.5-flash"
+    model_name: str = "gemma-4-31b-it"
 
     # Search Configuration
     max_search_queries: int = Field(
